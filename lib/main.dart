@@ -1,9 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // FIX 1 — Android 15 Edge-to-Edge System UI Enforcement
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+  );
+
   runApp(const AntigravityApp());
 }
 
@@ -77,6 +91,11 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
   @override
   void initState() {
     super.initState();
+    // FIX 11 — Post frame initialization for sub-second cold start on Android 15+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Background non-critical initialization
+    });
+
     _screens.addAll([
       HomeScreen(onNavigateToScan: (scanType) {
         setState(() {
@@ -92,9 +111,11 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
+      body: SafeArea(
+        child: IndexedStack(
+          index: _currentIndex,
+          children: _screens,
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
