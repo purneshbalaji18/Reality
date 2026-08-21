@@ -36,16 +36,16 @@ async def lifespan(app: FastAPI):
 async def _run_startup_checks():
     """Run all startup diagnostics and warm the alias cache."""
 
-    line = "─" * 43
+    line = "-" * 43
 
     # 1. Supabase connection
     sb_client = supabase_manager.get_client()
-    sb_status = "✓ Connected" if sb_client else "✗ Not connected (seed-memory fallback)"
+    sb_status = "[OK] Connected" if sb_client else "[--] Not connected (seed-memory fallback)"
 
     # 2. Warm alias cache
     await lookup_service.warm_cache()
     alias_count = lookup_service.get_cache_count()
-    alias_status = f"✓ {alias_count} aliases loaded" if alias_count > 0 else "✗ Empty (Supabase unavailable?)"
+    alias_status = f"[OK] {alias_count} aliases loaded" if alias_count > 0 else "[--] Empty (Supabase unavailable?)"
 
     # 3. Ingredient count from Supabase
     ing_count = 0
@@ -55,20 +55,20 @@ async def _run_startup_checks():
             ing_count = resp.count if hasattr(resp, 'count') and resp.count else len(resp.data or [])
         except Exception as e:
             logger.warning(f"Could not count ingredients: {e}")
-    ing_status = f"✓ {ing_count} in database" if ing_count > 0 else "✗ 0 (check seeds)"
+    ing_status = f"[OK] {ing_count} in database" if ing_count > 0 else "[--] 0 (check seeds)"
 
     # 4. API keys
-    groq_status = "✓ Key present" if settings.groq_api_key else "✗ Key not set (fallback to Gemini)"
-    gemini_status = "✓ Key present" if settings.gemini_api_key else "✗ Key not set (rule-based fallback)"
+    groq_status = "[OK] Key present" if settings.groq_api_key else "[--] Key not set (fallback to Gemini)"
+    gemini_status = "[OK] Key present" if settings.gemini_api_key else "[--] Key not set (rule-based fallback)"
 
     # 5. Tesseract OCR binary
     tesseract_path = shutil.which("tesseract")
-    ocr_status = f"✓ Binary found ({tesseract_path})" if tesseract_path else "✗ Not found (OCR disabled)"
+    ocr_status = f"[OK] Binary found ({tesseract_path})" if tesseract_path else "[--] Not found (OCR disabled)"
 
     # Print startup banner
     print(f"""
 {line}
-  ANTIGRAVITY BACKEND — STARTUP CHECK
+  ANTIGRAVITY BACKEND -- STARTUP CHECK
 {line}
   Supabase      : {sb_status}
   Alias cache   : {alias_status}

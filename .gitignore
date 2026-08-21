@@ -68,3 +68,8 @@ android/local.properties
 
 # Logs
 *.log
+
+# Local SDK & Metadata
+flutter/
+.metadata
+

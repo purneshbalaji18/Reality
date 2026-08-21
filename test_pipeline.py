@@ -56,9 +56,9 @@ async def run_test(test_case: dict, index: int) -> bool:
     name = test_case["name"]
     ingredients = test_case["ingredients"]
 
-    print(f"\n{'═' * 60}")
+    print(f"\n{'=' * 60}")
     print(f"  TEST {index + 1}: {name}")
-    print(f"{'═' * 60}")
+    print(f"{'=' * 60}")
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -68,14 +68,14 @@ async def run_test(test_case: dict, index: int) -> bool:
             )
 
         if response.status_code != 200:
-            print(f"  ✗ FAIL — HTTP {response.status_code}")
+            print(f"  [FAIL] HTTP {response.status_code}")
             print(f"  Response: {response.text[:300]}")
             return False
 
         data = response.json()
 
         if not data.get("success"):
-            print(f"  ✗ FAIL — API returned success=false")
+            print(f"  [FAIL] API returned success=false")
             print(f"  Response: {json.dumps(data, indent=2)[:500]}")
             return False
 
@@ -105,37 +105,37 @@ async def run_test(test_case: dict, index: int) -> bool:
             harm_badge = f"[{f['harm_level'].upper()}]"
             canonical = f.get("matched_canonical_name") or f.get("raw_name_on_label")
             summary = (f.get("harm_summary") or "")[:80]
-            print(f"    {harm_badge:12s} {canonical} — {summary}")
+            print(f"    {harm_badge:12s} {canonical} - {summary}")
 
         print(f"  Clinical (1st) : {first_sentence[:120]}")
-        print(f"\n  ✓ PASS")
+        print(f"\n  [PASS]")
         return True
 
     except httpx.ConnectError:
-        print(f"  ✗ FAIL — Cannot connect to {BASE_URL}")
+        print(f"  [FAIL] Cannot connect to {BASE_URL}")
         print(f"  Make sure the server is running: uvicorn app.main:app --reload")
         return False
     except Exception as e:
-        print(f"  ✗ FAIL — Exception: {e}")
+        print(f"  [FAIL] Exception: {e}")
         return False
 
 
 async def main():
     """Run all test cases sequentially."""
-    print("\n" + "─" * 60)
-    print("  ANTIGRAVITY — END-TO-END PIPELINE TEST")
-    print("─" * 60)
+    print("\n" + "-" * 60)
+    print("  ANTIGRAVITY -- END-TO-END PIPELINE TEST")
+    print("-" * 60)
 
     # Health check first
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             health = await client.get(f"{BASE_URL}/health")
             h = health.json()
-            print(f"  Server         : ✓ Healthy ({h.get('environment', 'unknown')})")
+            print(f"  Server         : [OK] Healthy ({h.get('environment', 'unknown')})")
             print(f"  Alias cache    : {h.get('alias_cache_count', '?')} aliases")
-            print(f"  Supabase       : {'✓' if h.get('supabase_connected') else '✗'}")
+            print(f"  Supabase       : {'[OK]' if h.get('supabase_connected') else '[--]'}")
     except Exception:
-        print(f"  Server         : ✗ Cannot reach {BASE_URL}")
+        print(f"  Server         : [--] Cannot reach {BASE_URL}")
         print(f"  Aborting tests.")
         sys.exit(1)
 
@@ -147,13 +147,13 @@ async def main():
     # Summary
     passed_count = sum(results)
     total = len(results)
-    print(f"\n{'═' * 60}")
+    print(f"\n{'=' * 60}")
     print(f"  RESULTS: {passed_count}/{total} PASSED")
     if passed_count == total:
-        print(f"  🎉 All tests passed!")
+        print(f"  All tests passed!")
     else:
-        print(f"  ⚠️  {total - passed_count} test(s) failed.")
-    print(f"{'═' * 60}\n")
+        print(f"  {total - passed_count} test(s) failed.")
+    print(f"{'=' * 60}\n")
 
     sys.exit(0 if passed_count == total else 1)
 
