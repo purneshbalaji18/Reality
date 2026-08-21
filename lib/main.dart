@@ -320,11 +320,13 @@ class HomeScreen extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
-                      SizedBox(width: 8),
-                      Text(
-                        'Watchlist: Restricted Additives in India',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                      const Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Watchlist: Restricted Additives in India',
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
                       ),
                     ],
                   ),
