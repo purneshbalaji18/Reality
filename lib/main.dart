@@ -125,7 +125,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
           });
         },
         backgroundColor: const Color(0xFF0F172A),
-        indicatorColor: const Color(0xFF6366F1).withOpacity(0.3),
+        indicatorColor: const Color(0xFF6366F1).withValues(alpha: 0.3),
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),

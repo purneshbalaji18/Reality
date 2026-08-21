@@ -120,7 +120,7 @@ class ResultScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.2),
+                  color: color.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -164,7 +164,7 @@ class ResultScreen extends StatelessWidget {
               margin: const EdgeInsets.only(bottom: 8),
               child: ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: color.withOpacity(0.2),
+                  backgroundColor: color.withValues(alpha: 0.2),
                   child: Icon(
                     isResolved ? Icons.shield_outlined : Icons.help_outline,
                     color: color,

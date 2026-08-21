@@ -291,9 +291,9 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.15),
+                    color: Colors.red.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
+                    border: Border.all(color: Colors.redAccent.withValues(alpha: 0.5)),
                   ),
                   child: Row(
                     children: [
@@ -362,7 +362,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              color: getHarmColor(_scanResult!['overall_harm_level']).withOpacity(0.2),
+                              color: getHarmColor(_scanResult!['overall_harm_level']).withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
@@ -406,7 +406,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                       margin: const EdgeInsets.only(bottom: 8),
                       child: ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: getHarmColor(harm).withOpacity(0.2),
+                          backgroundColor: getHarmColor(harm).withValues(alpha: 0.2),
                           child: Icon(
                             isResolved ? Icons.shield_outlined : Icons.help_outline,
                             color: getHarmColor(harm),

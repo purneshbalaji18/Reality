@@ -67,7 +67,7 @@ class HomeScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF6366F1).withOpacity(0.4),
+                    color: const Color(0xFF6366F1).withValues(alpha: 0.4),
                     blurRadius: 16,
                     offset: const Offset(0, 6),
                   ),
@@ -183,7 +183,7 @@ class HomeScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFF1E293B),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
+                border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
               ),
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -243,13 +243,13 @@ class _QuickScanCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xFF1E293B),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.3)),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             CircleAvatar(
-              backgroundColor: color.withOpacity(0.2),
+              backgroundColor: color.withValues(alpha: 0.2),
               child: Icon(icon, color: color),
             ),
             const SizedBox(height: 12),
@@ -298,7 +298,7 @@ class _SampleProductCard extends StatelessWidget {
         trailing: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
-            color: harmColor.withOpacity(0.2),
+            color: harmColor.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
