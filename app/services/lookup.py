@@ -25,6 +25,8 @@ class LookupService:
     def __init__(self):
         # In-memory alias cache: alias_name (lowered) → ingredient UUID string
         self._alias_cache: Dict[str, str] = {}
+        # In-memory profile cache: ingredient UUID string → base AnalyzedIngredient
+        self._profile_cache: Dict[str, AnalyzedIngredient] = {}
         self._cache_warmed: bool = False
 
     # ------------------------------------------------------------------
@@ -96,17 +98,7 @@ class LookupService:
 
     def resolve_ingredient(self, raw_name: str) -> AnalyzedIngredient:
         """Resolve a raw ingredient name against the alias cache and Supabase.
-        
-        Flow:
-        1. Normalize: raw_name.lower().strip()
-        2. Check alias cache → get ingredient_id
-        3. If found: fetch full ingredient profile from Supabase
-        4. Fetch organ_targets for ingredient_id
-        5. Fetch vulnerabilities for ingredient_id
-        6. Fetch regulatory_status for ingredient_id
-        7. Build and return AnalyzedIngredient
-        
-        If Supabase is unavailable: return unresolved. Never crash.
+        Uses in-memory profile caching for ultra-fast performance.
         """
         norm_name = raw_name.lower().strip()
 
@@ -121,6 +113,25 @@ class LookupService:
                 ingredient_id=None,
                 harm_level="unknown",
                 is_resolved=False
+            )
+
+        # Step 2: Check in-memory profile cache
+        if ingredient_id in self._profile_cache:
+            base_profile = self._profile_cache[ingredient_id]
+            # Copy profile with current raw_name_on_label
+            return AnalyzedIngredient(
+                raw_name_on_label=raw_name,
+                matched_canonical_name=base_profile.matched_canonical_name,
+                ingredient_id=base_profile.ingredient_id,
+                harm_level=base_profile.harm_level,
+                harm_summary=base_profile.harm_summary,
+                mechanism_description=base_profile.mechanism_description,
+                carcinogen_class=base_profile.carcinogen_class,
+                endocrine_disruptor=base_profile.endocrine_disruptor,
+                organ_targets=base_profile.organ_targets,
+                vulnerabilities=base_profile.vulnerabilities,
+                regulatory_statuses=base_profile.regulatory_statuses,
+                is_resolved=True
             )
 
         # Step 2: Fetch full ingredient profile from Supabase
@@ -217,7 +228,7 @@ class LookupService:
         # 7. Build and return AnalyzedIngredient
         canonical_name = ing.get("canonical_name", raw_name)
 
-        return AnalyzedIngredient(
+        profile = AnalyzedIngredient(
             raw_name_on_label=raw_name,
             matched_canonical_name=canonical_name,
             ingredient_id=ingredient_id,
@@ -233,6 +244,9 @@ class LookupService:
             regulatory_statuses=regulatory,
             is_resolved=True
         )
+
+        self._profile_cache[ingredient_id] = profile
+        return profile
 
 
 lookup_service = LookupService()

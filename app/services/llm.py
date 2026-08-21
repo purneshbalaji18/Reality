@@ -125,7 +125,7 @@ class LLMService:
             "temperature": 0.2
         }
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=5.0) as client:
             try:
                 resp = await client.post(url, json=body, headers=headers)
                 if resp.status_code == 200:
@@ -145,7 +145,7 @@ class LLMService:
             }]
         }
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=5.0) as client:
             try:
                 resp = await client.post(url, json=body)
                 if resp.status_code == 200:
