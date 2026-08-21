@@ -1,4 +1,5 @@
 import re
+import logging
 from typing import List, Dict, Any, Optional
 from app.db.supabase import supabase_manager
 from app.schemas.scan import (
@@ -8,163 +9,69 @@ from app.schemas.scan import (
     RegulatoryStatusItem
 )
 
-
-# Memory fallback dictionary based on our 51-ingredient seed database
-SEED_INGREDIENT_CACHE: Dict[str, Dict[str, Any]] = {
-    "methylparaben": {
-        "id": "a0000000-0000-4000-a000-000000000001",
-        "canonical_name": "Methylparaben",
-        "harm_level": "low",
-        "harm_summary": "Widely used preservative. Low risk of mild skin sensitization in sensitive individuals.",
-        "mechanism_description": "Weak estrogenic receptor binding; rapidly metabolized to p-hydroxybenzoic acid.",
-        "carcinogen_class": None,
-        "endocrine_disruptor": True,
-        "bioaccumulation": False,
-        "organ_targets": [{"organ_system": "skin", "effect_type": "sensitization", "severity": "mild"}],
-        "vulnerabilities": [{"population_group": "eczema_patients", "risk_level": "moderate", "risk_multiplier": 1.5, "reason": "Disrupted skin barrier increases absorption and contact dermatitis risk."}],
-        "regulatory": [
-            {"authority_code": "CDSCO", "authority_name": "CDSCO (India)", "country": "IN", "verdict": "approved_restricted", "max_concentration_pct": 0.4, "restriction_notes": "Max 0.4% single, 0.8% total parabens in cosmetics.", "regulation_ref": "IS 4707:2001", "is_india_eu_gap": False},
-            {"authority_code": "EU", "authority_name": "European Union (EFSA/SCCS)", "country": "EU", "verdict": "approved_restricted", "max_concentration_pct": 0.4, "restriction_notes": "Max 0.4% single ester.", "regulation_ref": "EC/1223/2009/Annex-V/12", "is_india_eu_gap": False}
-        ]
-    },
-    "propylparaben": {
-        "id": "a0000000-0000-4000-a000-000000000002",
-        "canonical_name": "Propylparaben",
-        "harm_level": "moderate",
-        "harm_summary": "Preservative with endocrine disruption potential. Restricted in EU leave-on baby products.",
-        "mechanism_description": "Binds estrogen receptors; longer alkyl chain increases affinity compared to methylparaben.",
-        "carcinogen_class": None,
-        "endocrine_disruptor": True,
-        "bioaccumulation": False,
-        "organ_targets": [{"organ_system": "endocrine", "effect_type": "estrogenic_disruption", "severity": "moderate"}],
-        "vulnerabilities": [{"population_group": "infants", "risk_level": "high", "risk_multiplier": 2.0, "reason": "Immature metabolic enzymes reduce paraben clearance."}],
-        "regulatory": [
-            {"authority_code": "CDSCO", "authority_name": "CDSCO (India)", "country": "IN", "verdict": "approved_restricted", "max_concentration_pct": 0.14, "restriction_notes": "Max 0.14% in cosmetics.", "regulation_ref": "IS 4707:2001", "is_india_eu_gap": False},
-            {"authority_code": "EU", "authority_name": "European Union (EFSA/SCCS)", "country": "EU", "verdict": "approved_restricted", "max_concentration_pct": 0.14, "restriction_notes": "Banned in leave-on diaper products for children under 3.", "regulation_ref": "EU/2014/358", "is_india_eu_gap": True}
-        ]
-    },
-    "dmdm hydantoin": {
-        "id": "a0000000-0000-4000-a000-000000000006",
-        "canonical_name": "DMDM Hydantoin",
-        "harm_level": "high",
-        "harm_summary": "Formaldehyde-releasing preservative. High risk of contact allergy and hair/scalp irritation.",
-        "mechanism_description": "Slowly decomposes in aqueous solution to release free formaldehyde gas.",
-        "carcinogen_class": None,
-        "endocrine_disruptor": False,
-        "bioaccumulation": False,
-        "organ_targets": [{"organ_system": "skin", "effect_type": "contact_dermatitis", "severity": "high"}, {"organ_system": "respiratory", "effect_type": "irritation", "severity": "moderate"}],
-        "vulnerabilities": [{"population_group": "asthma_patients", "risk_level": "high", "risk_multiplier": 2.5, "reason": "Inhaled formaldehyde triggers bronchospasm."}],
-        "regulatory": [
-            {"authority_code": "CDSCO", "authority_name": "CDSCO (India)", "country": "IN", "verdict": "not_evaluated", "max_concentration_pct": None, "restriction_notes": "No specific formaldehyde releaser limits in India.", "regulation_ref": None, "is_india_eu_gap": True},
-            {"authority_code": "EU", "authority_name": "European Union (EFSA/SCCS)", "country": "EU", "verdict": "approved_restricted", "max_concentration_pct": 0.2, "restriction_notes": "Max 0.2% free HCHO. Must label 'contains formaldehyde' if >0.05%.", "regulation_ref": "EC/1223/2009/Annex-V/13", "is_india_eu_gap": True}
-        ]
-    },
-    "hydroquinone": {
-        "id": "a0000000-0000-4000-a000-000000000023",
-        "canonical_name": "Hydroquinone",
-        "harm_level": "critical",
-        "harm_summary": "Potent skin lightener. Causes exogenous ochronosis (permanent skin darkening) and potential organ toxicity.",
-        "mechanism_description": "Inhibits tyrosinase enzyme, preventing melanin synthesis; toxic to melanocytes.",
-        "carcinogen_class": "group_3",
-        "endocrine_disruptor": False,
-        "bioaccumulation": False,
-        "organ_targets": [{"organ_system": "skin", "effect_type": "ochronosis", "severity": "severe"}, {"organ_system": "liver", "effect_type": "hepatotoxicity", "severity": "high"}],
-        "vulnerabilities": [{"population_group": "pregnant_women", "risk_level": "critical", "risk_multiplier": 3.0, "reason": "High systemic absorption (up to 45%) poses fetal exposure risk."}],
-        "regulatory": [
-            {"authority_code": "CDSCO", "authority_name": "CDSCO (India)", "country": "IN", "verdict": "approved_restricted", "max_concentration_pct": 2.0, "restriction_notes": "Prescription only (2%). OTC enforcement gaps exist.", "regulation_ref": "Drugs & Cosmetics Act", "is_india_eu_gap": True},
-            {"authority_code": "EU", "authority_name": "European Union (EFSA/SCCS)", "country": "EU", "verdict": "banned", "max_concentration_pct": None, "restriction_notes": "Banned in cosmetic products entirely.", "regulation_ref": "EC/1223/2009/Annex-II/1339", "is_india_eu_gap": True}
-        ]
-    },
-    "titanium dioxide": {
-        "id": "a0000000-0000-4000-a000-000000000036",
-        "canonical_name": "Titanium Dioxide",
-        "harm_level": "moderate",
-        "harm_summary": "Banned as a food additive in EU (E171) due to potential genotoxicity. Safe as topical sunscreen.",
-        "mechanism_description": "Inhaled or ingested nanoparticles cause oxidative stress and DNA strand breaks.",
-        "carcinogen_class": "group_2b",
-        "endocrine_disruptor": False,
-        "bioaccumulation": True,
-        "organ_targets": [{"organ_system": "gastrointestinal", "effect_type": "genotoxicity", "severity": "high"}],
-        "vulnerabilities": [{"population_group": "children", "risk_level": "high", "risk_multiplier": 2.0, "reason": "Higher relative oral intake from candies/biscuits per body weight."}],
-        "regulatory": [
-            {"authority_code": "FSSAI", "authority_name": "FSSAI (India)", "country": "IN", "verdict": "approved", "max_concentration_pct": None, "restriction_notes": "Permitted food colour INS 171.", "regulation_ref": "FSS Regulations 2011", "is_india_eu_gap": True},
-            {"authority_code": "EU", "authority_name": "European Union (EFSA/SCCS)", "country": "EU", "verdict": "banned", "max_concentration_pct": None, "restriction_notes": "BANNED as food additive (E171) since Feb 2022.", "regulation_ref": "EU/2022/63", "is_india_eu_gap": True}
-        ]
-    },
-    "triclosan": {
-        "id": "a0000000-0000-4000-a000-000000000025",
-        "canonical_name": "Triclosan",
-        "harm_level": "high",
-        "harm_summary": "Antibacterial chemical that disrupts thyroid hormones and contributes to antibiotic resistance.",
-        "mechanism_description": "Inhibits bacterial enoyl-acyl carrier protein reductase; bioaccumulates and disrupts endocrine signaling.",
-        "carcinogen_class": None,
-        "endocrine_disruptor": True,
-        "bioaccumulation": True,
-        "organ_targets": [{"organ_system": "endocrine", "effect_type": "thyroid_disruption", "severity": "high"}],
-        "vulnerabilities": [{"population_group": "pregnant_women", "risk_level": "high", "risk_multiplier": 2.2, "reason": "Thyroid hormone disruption alters fetal neurodevelopment."}],
-        "regulatory": [
-            {"authority_code": "CDSCO", "authority_name": "CDSCO (India)", "country": "IN", "verdict": "not_evaluated", "max_concentration_pct": None, "restriction_notes": "No specific restriction in Indian soaps or toothpastes.", "regulation_ref": None, "is_india_eu_gap": True},
-            {"authority_code": "EU", "authority_name": "European Union (EFSA/SCCS)", "country": "EU", "verdict": "approved_restricted", "max_concentration_pct": 0.3, "restriction_notes": "Max 0.3% in rinse-off soaps/toothpaste only. Banned in leave-on.", "regulation_ref": "EU/2014/358", "is_india_eu_gap": True}
-        ]
-    },
-    "tartrazine": {
-        "id": "a0000000-0000-4000-a000-000000000012",
-        "canonical_name": "Tartrazine",
-        "harm_level": "moderate",
-        "harm_summary": "Synthetic azo food dye (INS 102). Triggers hyperactivity in children and hives in asthmatics.",
-        "mechanism_description": "Histamine release trigger; azoreductase intestinal metabolism produces sulfanilic acid.",
-        "carcinogen_class": None,
-        "endocrine_disruptor": False,
-        "bioaccumulation": False,
-        "organ_targets": [{"organ_system": "immune", "effect_type": "urticaria", "severity": "moderate"}],
-        "vulnerabilities": [{"population_group": "children", "risk_level": "high", "risk_multiplier": 2.0, "reason": "Linked to ADHD and hyperactivity symptoms in pediatric studies."}],
-        "regulatory": [
-            {"authority_code": "FSSAI", "authority_name": "FSSAI (India)", "country": "IN", "verdict": "approved_restricted", "max_concentration_pct": None, "restriction_notes": "Permitted food colour INS 102.", "regulation_ref": "FSS Regulations 2011", "is_india_eu_gap": False},
-            {"authority_code": "EU", "authority_name": "European Union (EFSA/SCCS)", "country": "EU", "verdict": "approved_restricted", "max_concentration_pct": None, "restriction_notes": "Mandatory warning: 'May have an adverse effect on activity and attention in children.'", "regulation_ref": "EC/1333/2008/Annex-V", "is_india_eu_gap": True}
-        ]
-    },
-    "msg": {
-        "id": "a0000000-0000-4000-a000-000000000018",
-        "canonical_name": "Monosodium Glutamate",
-        "harm_level": "safe",
-        "harm_summary": "Naturally occurring amino acid salt. Generally safe; Chinese Restaurant Syndrome claims unsubstantiated.",
-        "mechanism_description": "Activates umami taste receptors (TAS1R1/TAS1R3) on tongue.",
-        "carcinogen_class": None,
-        "endocrine_disruptor": False,
-        "bioaccumulation": False,
-        "organ_targets": [],
-        "vulnerabilities": [],
-        "regulatory": [
-            {"authority_code": "FSSAI", "authority_name": "FSSAI (India)", "country": "IN", "verdict": "approved", "max_concentration_pct": None, "restriction_notes": "Permitted flavour enhancer INS 621.", "regulation_ref": "FSS Regulations 2011", "is_india_eu_gap": False},
-            {"authority_code": "EU", "authority_name": "European Union (EFSA/SCCS)", "country": "EU", "verdict": "approved", "max_concentration_pct": None, "restriction_notes": "Approved quantum satis.", "regulation_ref": "EC/1333/2008", "is_india_eu_gap": False}
-        ]
-    }
-}
-
-# Alias map for instant normalization
-ALIAS_MAP: Dict[str, str] = {
-    "ins 102": "tartrazine",
-    "e102": "tartrazine",
-    "yellow 5": "tartrazine",
-    "ins 171": "titanium dioxide",
-    "e171": "titanium dioxide",
-    "ins 211": "sodium benzoate",
-    "ins 202": "potassium sorbate",
-    "ins 621": "msg",
-    "ins 319": "tbhq",
-    "ins 338": "phosphoric acid",
-    "dmdm": "dmdm hydantoin",
-    "parfum": "fragrance",
-    "perfume": "fragrance",
-    "sls": "sodium lauryl sulfate",
-    "sles": "sodium laureth sulfate"
-}
+logger = logging.getLogger("antigravity.lookup")
 
 
 class LookupService:
-    """Ingredient Resolution & Knowledge Base Lookup Engine"""
+    """Ingredient Resolution & Knowledge Base Lookup Engine.
+    
+    Architecture:
+    - On startup, warm_cache() loads ALL ingredient_aliases into memory.
+    - resolve_ingredient() does instant dict lookup for alias → ingredient_id.
+    - Full ingredient profile fetched from Supabase only for resolved matches.
+    - If Supabase is unavailable, falls back to unresolved gracefully.
+    """
+
+    def __init__(self):
+        # In-memory alias cache: alias_name (lowered) → ingredient UUID string
+        self._alias_cache: Dict[str, str] = {}
+        self._cache_warmed: bool = False
+
+    # ------------------------------------------------------------------
+    # STARTUP CACHE
+    # ------------------------------------------------------------------
+
+    async def warm_cache(self) -> None:
+        """Load ALL rows from ingredient_aliases table into memory.
+        Called once on FastAPI startup event.
+        Key: alias_name.lower().strip()
+        Value: ingredient_id (UUID string)
+        """
+        client = supabase_manager.get_client()
+        if not client:
+            logger.warning("[LookupService] Supabase not available — alias cache NOT loaded. Running with empty cache.")
+            return
+
+        try:
+            response = client.table("ingredient_aliases").select("alias_name, ingredient_id").execute()
+            rows = response.data or []
+
+            for row in rows:
+                alias = row.get("alias_name", "").lower().strip()
+                ingredient_id = row.get("ingredient_id", "")
+                if alias and ingredient_id:
+                    self._alias_cache[alias] = ingredient_id
+
+            self._cache_warmed = True
+            logger.info(f"Alias cache warmed: {len(self._alias_cache)} aliases loaded")
+
+        except Exception as e:
+            logger.error(f"[LookupService] Failed to warm alias cache: {e}")
+
+    def get_cache_count(self) -> int:
+        """Return the number of aliases currently in the cache."""
+        return len(self._alias_cache)
+
+    def is_cache_warmed(self) -> bool:
+        """Return whether the cache has been successfully warmed."""
+        return self._cache_warmed
+
+    # ------------------------------------------------------------------
+    # TEXT PARSING
+    # ------------------------------------------------------------------
 
     def parse_raw_text(self, text: str) -> List[str]:
+        """Tokenize raw ingredient label text into individual ingredient names."""
         if not text:
             return []
 
@@ -174,7 +81,7 @@ class LookupService:
 
         # Split by comma, semicolon, bullet, or colon
         tokens = re.split(r'[,;•\:]', clean)
-        
+
         results = []
         for t in tokens:
             t_clean = t.strip()
@@ -183,45 +90,148 @@ class LookupService:
 
         return results
 
+    # ------------------------------------------------------------------
+    # INGREDIENT RESOLUTION
+    # ------------------------------------------------------------------
+
     def resolve_ingredient(self, raw_name: str) -> AnalyzedIngredient:
-        norm_name = raw_name.lower().strip()
+        """Resolve a raw ingredient name against the alias cache and Supabase.
         
-        # Check alias map
-        if norm_name in ALIAS_MAP:
-            norm_name = ALIAS_MAP[norm_name]
+        Flow:
+        1. Normalize: raw_name.lower().strip()
+        2. Check alias cache → get ingredient_id
+        3. If found: fetch full ingredient profile from Supabase
+        4. Fetch organ_targets for ingredient_id
+        5. Fetch vulnerabilities for ingredient_id
+        6. Fetch regulatory_status for ingredient_id
+        7. Build and return AnalyzedIngredient
+        
+        If Supabase is unavailable: return unresolved. Never crash.
+        """
+        norm_name = raw_name.lower().strip()
 
-        # Query memory cache
-        if norm_name in SEED_INGREDIENT_CACHE:
-            data = SEED_INGREDIENT_CACHE[norm_name]
+        # Step 1: Check alias cache
+        ingredient_id = self._alias_cache.get(norm_name)
 
-            organ_targets = [OrganTargetImpact(**ot) for ot in data.get("organ_targets", [])]
-            vulnerabilities = [VulnerabilityImpact(**v) for v in data.get("vulnerabilities", [])]
-            regulatory = [RegulatoryStatusItem(**r) for r in data.get("regulatory", [])]
-
+        if not ingredient_id:
+            # Not found in alias cache → unresolved
             return AnalyzedIngredient(
                 raw_name_on_label=raw_name,
-                matched_canonical_name=data["canonical_name"],
-                ingredient_id=data["id"],
-                matched_by_alias=raw_name if raw_name.lower() != data["canonical_name"].lower() else None,
-                harm_level=data["harm_level"],
-                harm_summary=data["harm_summary"],
-                mechanism_description=data["mechanism_description"],
-                carcinogen_class=data["carcinogen_class"],
-                endocrine_disruptor=data["endocrine_disruptor"],
-                bioaccumulation=data["bioaccumulation"],
-                organ_targets=organ_targets,
-                vulnerabilities=vulnerabilities,
-                regulatory_statuses=regulatory,
-                is_resolved=True
+                matched_canonical_name=None,
+                ingredient_id=None,
+                harm_level="unknown",
+                is_resolved=False
             )
 
-        # Unresolved fallback
+        # Step 2: Fetch full ingredient profile from Supabase
+        client = supabase_manager.get_client()
+        if not client:
+            logger.warning(f"[LookupService] Supabase unavailable — cannot fetch profile for '{raw_name}'")
+            return AnalyzedIngredient(
+                raw_name_on_label=raw_name,
+                matched_canonical_name=None,
+                ingredient_id=ingredient_id,
+                harm_level="unknown",
+                is_resolved=False
+            )
+
+        try:
+            return self._fetch_full_profile(client, raw_name, ingredient_id)
+        except Exception as e:
+            logger.error(f"[LookupService] Error fetching profile for '{raw_name}' (id={ingredient_id}): {e}")
+            return AnalyzedIngredient(
+                raw_name_on_label=raw_name,
+                matched_canonical_name=None,
+                ingredient_id=ingredient_id,
+                harm_level="unknown",
+                is_resolved=False
+            )
+
+    def _fetch_full_profile(self, client, raw_name: str, ingredient_id: str) -> AnalyzedIngredient:
+        """Fetch ingredient + organ_targets + vulnerabilities + regulatory_status from Supabase."""
+
+        # 3. Fetch ingredient base data
+        ing_resp = client.table("ingredients").select("*").eq("id", ingredient_id).execute()
+        ing_rows = ing_resp.data or []
+
+        if not ing_rows:
+            return AnalyzedIngredient(
+                raw_name_on_label=raw_name,
+                matched_canonical_name=None,
+                ingredient_id=ingredient_id,
+                harm_level="unknown",
+                is_resolved=False
+            )
+
+        ing = ing_rows[0]
+
+        # 4. Fetch organ targets
+        organ_targets = []
+        try:
+            ot_resp = client.table("ingredient_organ_targets").select("*").eq("ingredient_id", ingredient_id).execute()
+            for ot in (ot_resp.data or []):
+                organ_targets.append(OrganTargetImpact(
+                    organ_system=ot.get("organ_system", "unknown"),
+                    effect_type=ot.get("effect_description") or ot.get("effect_type", "unknown"),
+                    severity=ot.get("severity", "low")
+                ))
+        except Exception as e:
+            logger.error(f"[LookupService] Failed to fetch organ targets for {ingredient_id}: {e}")
+
+        # 5. Fetch vulnerabilities
+        vulnerabilities = []
+        try:
+            vul_resp = client.table("ingredient_vulnerabilities").select("*").eq("ingredient_id", ingredient_id).execute()
+            for v in (vul_resp.data or []):
+                vulnerabilities.append(VulnerabilityImpact(
+                    population_group=v.get("population_group", "general"),
+                    risk_level=v.get("risk_level") or "moderate",
+                    risk_multiplier=float(v.get("risk_multiplier", 1.0)),
+                    reason=v.get("explanation") or v.get("reason", "")
+                ))
+        except Exception as e:
+            logger.error(f"[LookupService] Failed to fetch vulnerabilities for {ingredient_id}: {e}")
+
+        # 6. Fetch regulatory status
+        regulatory = []
+        try:
+            reg_resp = client.table("regulatory_status").select(
+                "*, regulatory_authorities(code, full_name, country)"
+            ).eq("ingredient_id", ingredient_id).execute()
+
+            for r in (reg_resp.data or []):
+                auth = r.get("regulatory_authorities") or {}
+                regulatory.append(RegulatoryStatusItem(
+                    authority_code=auth.get("code") or r.get("authority_code", ""),
+                    authority_name=auth.get("full_name") or r.get("authority_name", ""),
+                    country=auth.get("country") or r.get("country", ""),
+                    verdict=r.get("verdict", "not_evaluated"),
+                    max_concentration_pct=r.get("max_concentration_pct"),
+                    restriction_notes=r.get("restriction_notes"),
+                    regulation_ref=r.get("regulation_ref"),
+                    is_india_eu_gap=r.get("is_india_eu_gap", False)
+                ))
+        except Exception as e:
+            logger.error(f"[LookupService] Failed to fetch regulatory status for {ingredient_id}: {e}")
+
+        # 7. Build and return AnalyzedIngredient
+        canonical_name = ing.get("canonical_name", raw_name)
+
         return AnalyzedIngredient(
             raw_name_on_label=raw_name,
-            matched_canonical_name=None,
-            ingredient_id=None,
-            harm_level="unknown",
-            is_resolved=False
+            matched_canonical_name=canonical_name,
+            ingredient_id=ingredient_id,
+            matched_by_alias=raw_name if raw_name.lower().strip() != canonical_name.lower().strip() else None,
+            harm_level=ing.get("harm_level", "unknown"),
+            harm_summary=ing.get("description"),            # column is 'description' in DB
+            mechanism_description=ing.get("mechanism_of_harm"),  # column is 'mechanism_of_harm' in DB
+            carcinogen_class=ing.get("carcinogen_class"),
+            endocrine_disruptor=ing.get("endocrine_disruptor", False),
+            bioaccumulation=ing.get("bioaccumulation", False),
+            organ_targets=organ_targets,
+            vulnerabilities=vulnerabilities,
+            regulatory_statuses=regulatory,
+            is_resolved=True
         )
 
 

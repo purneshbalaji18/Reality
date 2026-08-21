@@ -1,5 +1,5 @@
 import httpx
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from app.config import settings
 from app.schemas.scan import AnalyzedIngredient, ToxicologySummary
 
@@ -125,7 +125,7 @@ class LLMService:
             "temperature": 0.2
         }
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 resp = await client.post(url, json=body, headers=headers)
                 if resp.status_code == 200:
@@ -145,7 +145,7 @@ class LLMService:
             }]
         }
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 resp = await client.post(url, json=body)
                 if resp.status_code == 200:
